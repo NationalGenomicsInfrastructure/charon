@@ -54,7 +54,7 @@ DILSTART = {'40' : 'Library Normalization (MiSeq) 4.0',
     '39' : 'Library Normalization (Illumina SBS) 4.0'}
 SEQUENCING = {'38' : 'Illumina Sequencing (Illumina SBS) 4.0',
     '46' : 'MiSeq Run (MiSeq) 4.0',
-    '999': 'Illumina Sequencing (HiSeq X) 1.0', 
+    '999': 'Illumina Sequencing (HiSeq X) 1.0',
     }
 WORKSET = {'204' : 'Setup Workset/Plate'}
 SUMMARY = {'356' : 'Project Summary 1.3'}
@@ -104,7 +104,7 @@ def main(options):
     elif options.stress:
         stressTest(options)
 
-        
+
 def compareOldAndNew(old, new, options):
     autoupdate=False
     if old == None:
@@ -121,7 +121,7 @@ def compareOldAndNew(old, new, options):
         for sampleid in newsamples:
             sample=newsamples[sampleid]
             libs=sample.pop('libs')
-            
+
 
             if sampleid not in oldsamples:
                 logging.info("updating {0}".format(sampleid))
@@ -132,12 +132,12 @@ def compareOldAndNew(old, new, options):
                     newsample=oldsamples[sampleid]
                     newsample['status']=sample['status']
                     updateCharon(json.dumps(newsample),'{0}/api/v1/sample/{1}/{2}'.format(options.url, new['projectid'], sampleid), options)
-                
+
             for libid in libs:
                 lib=libs[libid]
                 seqruns=lib.pop('seqruns')
 
-                if autoupdate or libid not in oldsamples[sampleid]['libs']:  
+                if autoupdate or libid not in oldsamples[sampleid]['libs']:
                     print("updating {0} {1}".format(sampleid, libid))
                     writeToCharon(json.dumps(lib),'{0}/api/v1/libprep/{1}/{2}'.format(options.url, new['projectid'], sampleid), options)
                     autoupdate=True
@@ -193,7 +193,7 @@ def getCompleteProject(projectid, options):
 
         return project
     return None
-        
+
 def findprojs(key):
     projects=set()
     if key == 'all':
@@ -248,7 +248,7 @@ def updateCharon(jsonData, url, options):
                 logging.error("Document is being updated")
             else:
                 logging.error("Unknown error : {0} {0}".format(r.status_code, r.reason))
- 
+
 def writeToCharon(jsonData, url, options):
     if options.fake:
         print( "data {0}".format(jsonData))
@@ -268,13 +268,13 @@ def writeToCharon(jsonData, url, options):
                 print( "Document is being updated")
             else:
                 print( "Unkown error : {0} {1}".format(r.status_code, r.text))
- 
+
 def writeProjectData(data, options):
     project=data
     samples=project.pop('samples', None)
     url=options.url+'/api/v1/project'
     projson=json.dumps(project)
-    writeToCharon(projson, url, options) 
+    writeToCharon(projson, url, options)
     for sid in samples:
         libs=samples[sid].pop('libs', None)
         sampjson=json.dumps(samples[sid])
@@ -289,7 +289,7 @@ def writeProjectData(data, options):
                 seqjson=json.dumps(seqruns[seqrun])
                 url=options.url+'/api/v1/seqrun/'+project['projectid']+"/"+sid+"/"+lib
                 writeToCharon(seqjson, url, options)
-            
+
 def addFakeData(options):
 
     #adds seqrun data for a.wedell_13_03
@@ -330,29 +330,29 @@ def prepareData(projname):
         if 'Uppnex ID' in proj.udf:
             data['uppnex_id']=proj.udf['Uppnex ID']
         data['samples']={}
-        samples=lims.get_samples(projectlimsid=proj.id)    
+        samples=lims.get_samples(projectlimsid=proj.id)
         for sample in samples:
             sampinfo={ 'sampleid' : sample.name, 'received' : sample.date_received, 'status' : 'NEW', 'analysis_status' : 'TO_ANALYZE', 'total_autosomal_coverage' : "0"}
             if 'Reads Req' in sample.udf:
                 sampinfo['requested_reads']=sample.udf['Reads Req']
             if 'Status (manual)' in sample.udf and sample.udf['Status (manual)'] == "Aborted":
                 sampinfo['status']='ABORTED'
-            #even when you want a process, it is easier to use getartifact, because you can filter by sample 
+            #even when you want a process, it is easier to use getartifact, because you can filter by sample
             libstart=lims.get_artifacts(process_type=PREPEND.values(), sample_name=sample.name)
             #libstart=lims.get_processes(type=PREPSTART.values(), projectname=proj.name)
             libset=set()
             for art in libstart:
-               libset.add(art.parent_process) 
+               libset.add(art.parent_process)
 
             #Here I have all my lib preps start per sample in libs.
 
             libs=sorted(libset, key=lambda lib:lib.date_run)
- 
+
             sampinfo['libs']={}
             #get pools
             seqevents=lims.get_processes(type=SEQUENCING.values(), projectname=proj.name)
             alphaindex=65
-            for lib in libs: 
+            for lib in libs:
                 sampinfo['libs'][chr(alphaindex)]={}
                 sampinfo['libs'][chr(alphaindex)]['libprepid']=chr(alphaindex)
                 sampinfo['libs'][chr(alphaindex)]['limsid']=lib.id
@@ -377,7 +377,7 @@ def prepareData(projname):
                             if sample.name in [s.name for s in sa.samples] and sa.type=="Analyte":
                                 sampinfo['libs'][chr(alphaindex)]['seqruns'][se.udf['Run ID']]['lane_sequencing_status'][sa.location[1]]=sa.qc_flag
                                 sampinfo['libs'][chr(alphaindex)]['seqruns'][se.udf['Run ID']]['alignment_status']='NOT_RUNNING'
-                                sampinfo['libs'][chr(alphaindex)]['seqruns'][se.udf['Run ID']]['delivery_status']='NOT_DELIVERED'
+                                sampinfo['libs'][chr(alphaindex)]['seqruns'][se.udf['Run ID']]['delivery_status']='NOT DELIVERED'
                                 #get the artifacts generated by the demultiplexing (qc values are on them)
 
                 alphaindex+=1
@@ -402,7 +402,7 @@ def procHistory(proc, samplename):
         return []
     while not_done:
         logging.info ("looking for ",(starting_art))
-        not_done=False 
+        not_done=False
         for o in artifacts:
             logging.info (o.id)
             if o.id == starting_art:
@@ -421,10 +421,10 @@ def procHistory(proc, samplename):
                     if i in artifacts:
                         # while increment
                         starting_art=i.id
-                            
+
                         break #break the for allinputs, if we found the right one
                 break # breaks the for artifacts if we matched the current one
-    return hist 
+    return hist
 
 def stressTest(options):
     testprojects=[]
@@ -464,7 +464,7 @@ def genFakeFroject(number,name,samplesnb, libsnb, seqrunsnb):
     data['pipeline']="TEST"
     data['sequencing_facility']="NGI-S"
     data['best_practice_analysis']="TEST"
-    data['status']='CLOSED' 
+    data['status']='CLOSED'
     data['samples']={}
     for s in xrange(1,samplesnb+1):
         sampinfo={ 'sampleid' : "TEST_{0}_{1}".format(number,s), 'received' : datetime.datetime.today().strftime("%Y-%m-%d"), "total_autosomal_coverage" : "0", "libs":{}}
@@ -483,10 +483,10 @@ def genFakeFroject(number,name,samplesnb, libsnb, seqrunsnb):
 
             alphaindex+=1
         data['samples']["TEST_{0}_{1}".format(number,s)]=sampinfo
-        
-        
+
+
     return(data)
-    
+
 
 
 def delSample(ids, options):
@@ -494,7 +494,7 @@ def delSample(ids, options):
         logging.info("removing sample{0}".format(ids))
     session = requests.Session()
     headers = {'X-Charon-API-token': options.token, 'content-type': 'application/json'}
-  
+
     r=session.delete(options.url+'/api/v1/sample/'+ids, headers=headers)
     if options.verbose:
         if r.status_code==204:
@@ -508,7 +508,7 @@ def cleanCharon(pid,options):
         logging.info("removing project {0}".format(pid))
     session = requests.Session()
     headers = {'X-Charon-API-token': options.token, 'content-type': 'application/json'}
-  
+
     r=session.delete(options.url+'/api/v1/project/'+pid, headers=headers)
     if options.verbose:
         if r.status_code==204:
@@ -520,32 +520,32 @@ def cleanCharon(pid,options):
 if __name__ == '__main__':
     usage = "Usage:       python acheron.py [options]"
     parser = OptionParser(usage=usage)
-    parser.add_option("-a", "--all", dest="all", default=False, action="store_true", 
+    parser.add_option("-a", "--all", dest="all", default=False, action="store_true",
             help="Try to upload all IGN projects. This will wipe the current information stored in Charon")
-    parser.add_option("-c", "--clean", dest="clean", default=False, action="store_true", 
+    parser.add_option("-c", "--clean", dest="clean", default=False, action="store_true",
             help="This will erase the current information stored in Charon")
-    parser.add_option("-d", "--dummy", dest="dummy", default=False, action="store_true", 
+    parser.add_option("-d", "--dummy", dest="dummy", default=False, action="store_true",
             help="Will load the test project list and upload relevant data.")
     parser.add_option("-f", "--fake", dest="fake", default=False, action="store_true",
             help="don't actually do anything with the db, but print what will be uploaded")
-    parser.add_option("-n", "--new", dest="new", default=False, action="store_true", 
+    parser.add_option("-n", "--new", dest="new", default=False, action="store_true",
             help="Try to upload new IGN projects. This will NOT erase the current information stored in Charon")
-    parser.add_option("-p", "--project", dest="proj", default=None, 
+    parser.add_option("-p", "--project", dest="proj", default=None,
             help="-p <projectname> will try to upload the given project to charon")
-    parser.add_option("-r", "--remove", dest="delproj", default=None, 
+    parser.add_option("-r", "--remove", dest="delproj", default=None,
             help="-r <projectname> will try to remove the given project from charon")
     parser.add_option("-s", "--stress", type="int",dest="stress", default=0,
             help="-s N : stresses charon with N projects")
-    parser.add_option("-t", "--token", dest="token", default=os.environ.get('CHARON_API_TOKEN'), 
+    parser.add_option("-t", "--token", dest="token", default=os.environ.get('CHARON_API_TOKEN'),
             help="Charon API Token. Will be read from the env variable CHARON_API_TOKEN if not provided")
-    parser.add_option("-u", "--url", dest="url", default=os.environ.get('CHARON_BASE_URL'), 
+    parser.add_option("-u", "--url", dest="url", default=os.environ.get('CHARON_BASE_URL'),
             help="Charon base url. Will be read from the env variable CHARON_BASE_URL if not provided")
-    parser.add_option("-v", "--verbose", dest="verbose", default=False, action="store_true", 
+    parser.add_option("-v", "--verbose", dest="verbose", default=False, action="store_true",
             help="prints results for everything that is going on")
-    parser.add_option("-x", "--remove_sample", dest="delsamp", default=None, 
+    parser.add_option("-x", "--remove_sample", dest="delsamp", default=None,
             help="-x <projectname>/<samplename> will try to remove the given sample from charon")
     (options, args) = parser.parse_args()
-        
+
     if not options.token :
         print( "No valid token found in arg or in environment. Exiting.")
         sys.exit(-1)

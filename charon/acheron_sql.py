@@ -283,7 +283,7 @@ class CharonDocumentTracker:
                     seqdoc['mean_autosomal_coverage'] = 0
                     seqdoc['total_reads'] = 0
                     seqdoc['alignment_status'] = 'NOT_RUNNING'
-                    seqdoc['delivery_status'] = 'NOT_DELIVERED'
+                    seqdoc['delivery_status'] = 'NOT DELIVERED'
                     seqdoc['projectid'] = self.project.luid
                     seqdoc['sampleid'] = sample.name
                     seqdoc['libprepid'] = chr(alphaindex)
