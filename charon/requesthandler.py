@@ -19,12 +19,20 @@ class RequestHandler(tornado.web.RequestHandler):
     def prepare(self):
         "Get the database connection. Set up caches."
         self.db = utils.get_db()
-        self._cache = weakref.WeakValueDictionary()
-        self._users = weakref.WeakValueDictionary()
-        self._projects = weakref.WeakValueDictionary()
-        self._samples = weakref.WeakValueDictionary()
-        self._libpreps = weakref.WeakValueDictionary()
-        self._seqruns = weakref.WeakValueDictionary()
+        self._cache = {}
+        self._users = {}
+        self._projects = {}
+        self._samples = {}
+        self._libpreps = {}
+        self._seqruns = {}
+    
+    def on_finish(self):
+        self._cache.clear()
+        self._users.clear()
+        self._projects.clear()
+        self._samples.clear()
+        self._libpreps.clear()
+        self._seqruns.clear()
 
     def get_template_namespace(self):
         "Set the variables accessible within the template."
@@ -65,9 +73,9 @@ class RequestHandler(tornado.web.RequestHandler):
             else:
                 try:
                     api_token = self.request.headers['X-Charon-API-token']
-                    rows = list(self.db.view('user/api_token')[api_token])
+                    rows = list(self.db.view('user/api_token', key=api_token))
                     if len(rows) != 1: raise KeyError
-                    user = self.get_user(rows[0].value)
+                    user = self.get_user(rows[0]['value'])
                     if user.get('status') != constants.ACTIVE: raise KeyError
                 except KeyError:
                     return None
@@ -106,17 +114,17 @@ class RequestHandler(tornado.web.RequestHandler):
 
     def get_not_done_projects(self):
         "Get projects that are not done."
-        all = [r.value for r in
+        all = [r['value'] for r in
                self.db.view('project/not_done')]
         return all
 
     def get_not_done_samples(self, projectid=None):
         "Get samples that are not done."
         if projectid:
-            all = [r.value for r in
-                   self.db.view('sample/not_done') if r.key[0] == projectid]
+            all = [r['value'] for r in
+                   self.db.view('sample/not_done') if r['key'][0] == projectid]
         else:
-            all = [r.value for r in
+            all = [r['value'] for r in
                    self.db.view('sample/not_done')]
 
         return all
@@ -124,10 +132,10 @@ class RequestHandler(tornado.web.RequestHandler):
     def get_done_samples(self, projectid=None):
         "Get samples that are not done."
         if projectid:
-            all = [r.value for r in
-                   self.db.view('sample/done') if r.key[0] == projectid]
+            all = [r['value'] for r in
+                   self.db.view('sample/done') if r['key'][0] == projectid]
         else:
-            all = [r.value for r in
+            all = [r['value']for r in
                    self.db.view('sample/done')]
 
         return all
@@ -135,10 +143,10 @@ class RequestHandler(tornado.web.RequestHandler):
     def get_running_samples(self, projectid=None):
         "Get samples that are running."
         if projectid:
-            all = [r.value for r in
-                   self.db.view('sample/running') if r.key[0] == projectid]
+            all = [r['value'] for r in
+                   self.db.view('sample/running') if r['key'][0] == projectid]
         else:
-            all = [r.value for r in
+            all = [r['value'] for r in
                    self.db.view('sample/running')]
 
         return all
@@ -146,10 +154,10 @@ class RequestHandler(tornado.web.RequestHandler):
     def get_failed_samples(self, projectid=None):
         "Get samples that are failed."
         if projectid:
-            all = [r.value for r in
-                   self.db.view('sample/failed') if r.key[0] == projectid]
+            all = [r['value'] for r in
+                   self.db.view('sample/failed') if r['key'][0] == projectid]
         else:
-            all = [r.value for r in
+            all = [r['value'] for r in
                    self.db.view('sample/failed')]
 
         return all
@@ -157,31 +165,30 @@ class RequestHandler(tornado.web.RequestHandler):
     def get_analyzed_failed_samples(self, projectid=None):
         "Get samples that are failed or done."
         if projectid:
-            all = [r.value for r in
-                   self.db.view('sample/analyzed_failed') if r.key[0] == projectid]
+            all = [r['value'] for r in
+                   self.db.view('sample/analyzed_failed') if r['key'][0] == projectid]
         else:
-            all = [r.value for r in
+            all = [r['value'] for r in
                    self.db.view('sample/analyzed_failed')]
 
         return all
     def get_projectids_from_sampleid(self, sampleid):
         pj_ids=[]
-        view1 = self.db.view('internal/sampleids_to_projectids')
-        rows=view1[sampleid]
+        rows=self.db.view('internal/sampleids_to_projectids', key=sampleid)
         for row in rows:
-            pj_ids.append(row.value)
+            pj_ids.append(row['value'])
             return pj_ids
 
     def get_projects(self, from_key=None, to_key=None, limit=20):
         "Get all projects."
         if from_key:
-            view = self.db.view('project/modified', startkey=from_key, descending=True, limit=limit + 1)
+            view = self.db.view('project/modified', start_key=from_key, descending=True, limit=limit + 1)
         elif to_key:
-            view = self.db.view('project/modified', startkey=to_key, limit=limit + 1)
+            view = self.db.view('project/modified', start_key=to_key, limit=limit + 1)
         else:
             view = self.db.view('project/modified', limit=limit + 1, descending=True)
 
-        projects = [self.get_project(r.value) for r in view]
+        projects = [self.get_project(r['value']) for r in view]
         has_more = len(projects) > limit
 
         # Sort the projects by the key desc if going backwards
@@ -194,37 +201,37 @@ class RequestHandler(tornado.web.RequestHandler):
             projects = projects[:limit]
         
 
-        view1 = self.db.view('sample/count')
-        view2 = self.db.view('sample/count_done')
-        view3 = self.db.view('libprep/count', group_level=1)
-        view4 = self.db.view('sample/count_delivered')
+        view1 = 'sample/count'
+        view2 = 'sample/count_done'
+        view3 = 'libprep/count'
+        view4 = 'sample/count_delivered'
         for project in projects:
             try:
-                row = view1[project['projectid']].rows[0]
+                row = self.db.view(view1, key=project['projectid'])[0]
             except IndexError:
                 project['sample_count'] = 0
             else:
-                project['sample_count'] = row.value
+                project['sample_count'] = row['value']
             try:
-                row = view2[project['projectid']].rows[0]
+                row = self.db.view(view2, key=project['projectid'])[0]
             except IndexError:
                 project['sample_count_done'] = 0
             else:
-                project['sample_count_done'] = row.value
+                project['sample_count_done'] = row['value']
             try:
-                row = view4[project['projectid']].rows[0]
+                row = self.db.view(view4, key=project['projectid'])[0]
             except IndexError:
                 project['sample_count_delivered'] = 0
             else:
-                project['sample_count_delivered'] = row.value
+                project['sample_count_delivered'] = row['value']
             startkey = [project['projectid']]
             endkey = [project['projectid'], constants.HIGH_CHAR]
             try:
-                row = view3[startkey:endkey].rows[0]
+                row = self.db.view(view3, start_key=startkey, end_key=endkey, group_level=1)[0]
             except IndexError:
                 project['libprep_count'] = 0
             else:
-                project['libprep_count'] = row.value
+                project['libprep_count'] = row['value']
         return projects, has_more, from_key, to_key
 
     def get_sample(self, projectid, sampleid):
@@ -240,8 +247,8 @@ class RequestHandler(tornado.web.RequestHandler):
         "Get all samples for the project."
         startkey = (projectid or '', '')
         endkey = (projectid or constants.HIGH_CHAR, constants.HIGH_CHAR)
-        return [self.get_sample(*r.key) for r in
-                self.db.view('sample/sampleid')[startkey:endkey]]
+        return [self.get_sample(*r['key']) for r in
+                self.db.view('sample/sampleid', start_key=startkey, end_key=endkey)]
 
     def get_libprep(self, projectid, sampleid, libprepid):
         """Get the libprep by the projectid, sampleid and libprepid.
@@ -259,8 +266,8 @@ class RequestHandler(tornado.web.RequestHandler):
         endkey = (projectid,
                   sampleid or constants.HIGH_CHAR,
                   constants.HIGH_CHAR)
-        return [self.get_libprep(*r.key) for r in
-                self.db.view('libprep/libprepid')[startkey:endkey]]
+        return [self.get_libprep(*r['key']) for r in
+                self.db.view('libprep/libprepid', start_key=startkey, end_key=endkey)]
 
     def get_seqrun(self, projectid, sampleid, libprepid, seqrunid):
         """Get the libprep by the projectid, sampleid, libprepid and seqrunid.
@@ -280,27 +287,26 @@ class RequestHandler(tornado.web.RequestHandler):
                   sampleid or constants.HIGH_CHAR,
                   libprepid or constants.HIGH_CHAR,
                   constants.HIGH_CHAR)
-        return [self.get_seqrun(*r.key) for r in
-                self.db.view('seqrun/seqrunid')[startkey:endkey]]
+        return [self.get_seqrun(*r['key']) for r in
+                self.db.view('seqrun/seqrunid', start_key=startkey, end_key=endkey)]
 
     def get_and_cache(self, viewname, key, cache):
         """Get the item by the view name and the key.
         Try to get it from the cache, else from the database.
         Raise HTTP 404 if no such item."""
-        view = self.db.view(viewname, include_docs=True)
-        rows = list(view[key])
-        if len(rows) == 1:
-            item = cache[key] = rows[0].doc
+        view_rows = self.db.view(viewname, include_docs=True, key=key)
+        if len(view_rows) == 1:
+            item = cache[key] = view_rows[0]['doc']
             self._cache[item['_id']] = item
             return item
         else:
-            logging.debug("{0} elements for key {1} ".format(len(rows), key))
-            raise tornado.web.HTTPError(404, reason='{0} elements for key {1}'.format(len(rows), key))
+            logging.debug("{0} elements for key {1} ".format(len(view_rows), key))
+            raise tornado.web.HTTPError(404, reason='{0} elements for key {1}'.format(len(view_rows), key))
 
     def get_logs(self, id):
         "Return the log documents for the given doc id."
-        view = self.db.view('log/doc', include_docs=True)
-        return sorted([r.doc for r in view[id]],
+        view_result = self.db.view('log/doc', include_docs=True, key=id)
+        return sorted([r['doc'] for r in view_result],
                       key=functools.cmp_to_key(utils.cmp_timestamp),
                       reverse=True)
 

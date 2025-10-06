@@ -1,10 +1,9 @@
 "Test speed of CouchDB connection."
 
-import os
 import time
 import uuid
 
-import couchdb
+from charon import utils
 
 
 def do_create(db, total=400):
@@ -63,9 +62,7 @@ if __name__ == '__main__':
     import sys
     COUCHDB_SERVER = sys.argv[1]
     COUCHDB_DATABASE = 'charon'
-    server = couchdb.Server(COUCHDB_SERVER)
-    print(server.version())
-    db = server[COUCHDB_DATABASE]
+    db = utils.get_db()
     do_create(db)
     do_read(db)
     do_delete(db)

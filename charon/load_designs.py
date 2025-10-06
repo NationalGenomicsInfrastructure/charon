@@ -3,7 +3,7 @@
 import os
 import logging
 
-import couchdb
+import ibm_cloud_sdk_core
 
 
 def load_designs(db, root='designs'):
@@ -29,7 +29,7 @@ def load_designs(db, root='designs'):
         id = "_design/%s" % design
         try:
             doc = db[id]
-        except couchdb.http.ResourceNotFound:
+        except ibm_cloud_sdk_core.api_exception.ApiException:
             logging.debug("loading %s", id)
             db.save(dict(_id=id, views=views))
         else:

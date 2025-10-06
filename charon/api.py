@@ -4,7 +4,7 @@ import json
 import logging
 
 import tornado.web
-import couchdb
+import ibm_cloud_sdk_core
 import requests
 
 from . import constants
@@ -33,12 +33,12 @@ class ApiRequestHandler(RequestHandler):
         except KeyError:
             self.send_error(401, reason='API token missing')
         else:
-            rows = list(self.db.view('user/api_token')[api_token])
+            rows = list(self.db.view('user/api_token', key=api_token))
             if len(rows) != 1:
                 self.send_error(401, reason='invalid API token')
             else:
                 try:
-                    user = self.get_user(rows[0].value)
+                    user = self.get_user(rows[0]['value'])
                 except KeyError:
                     self.send_error(401, reason='invalid user email')
                 else:
@@ -110,7 +110,7 @@ class ApiDocument(ApiRequestHandler):
         "Return a database document as is."
         try:
             self.write(self.db[id])
-        except couchdb.http.ResourceNotFound:
+        except ibm_cloud_sdk_core.api_exception.ApiException:
             self.send_error(404, reason='no such item')
 
 

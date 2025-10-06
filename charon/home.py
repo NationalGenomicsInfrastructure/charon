@@ -5,7 +5,6 @@ import json
 import functools
 
 import tornado.web
-import couchdb
 
 from . import constants
 from . import settings
@@ -34,52 +33,53 @@ def sampleStats(handler, projectid=None):
         running="UNDER_ANALYSIS"
         coverage="TOTAL_COV"
 
-    view = handler.db.view('sample/summary_count')
-    pview = handler.db.view('project/projectid')
-    seqview = handler.db.view('sample/sequenced', group=True)
+    db = handler.db
+    view = 'sample/summary_count'
+    pview = 'project/projectid'
+    seqview = 'sample/sequenced'
     try:
-        data['tot'] = view[total].rows[0].value
+        data['tot'] = db.view(view, key=total)[0]['value']
     except (KeyError, IndexError):
         data['tot']=0
     try:
-        data['ab'] = view[aborted].rows[0].value
+        data['ab'] = db.view(view, key=aborted)[0]['value']
     except (KeyError, IndexError):
         data['ab']=0
     try:
-        data['passed'] = view[passed].rows[0].value
+        data['passed'] = db.view(view, key=passed)[0]['value']
     except (KeyError, IndexError):
         data['passed']=0
     try:
-        data['passed_unab'] = view[passed_unab].rows[0].value
+        data['passed_unab'] = db.view(view, key=passed_unab)[0]['value']
     except (KeyError, IndexError):
         data['passed_unab']=0
     try:
-        data['failed'] = view[failed].rows[0].value
+        data['failed'] = db.view(view, key=failed)[0]['value']
     except (KeyError, IndexError):
         data['failed']=0
     data['ana'] = data['passed'] + data['failed']
     try:
-        data['runn'] = view[running].rows[0].value
+        data['runn'] = db.view(view, key=running)[0]['value']
     except (KeyError, IndexError):
         data['runn']=0
     try:
         seq=0
         if projectid:
-            for row in seqview[[projectid, '']:[projectid, constants.HIGH_CHAR]]:
+            for row in db.view(seqview, group=True, start_key=[projectid, ''], end_key=[projectid, constants.HIGH_CHAR]):
                 seq+=1
         else:
-            for row in seqview:
+            for row in db.view(seqview, group=True):
                 seq+=1
         data['seq'] = seq
     except (KeyError, IndexError):
         data['seq']=0
     try:
-        data['cov'] = view[coverage].rows[0].value
+        data['cov'] = db.view(view, key=coverage)[0]['value']
     except (KeyError, IndexError):
         data['cov']=0
     data['hge'] = int(data['cov'] / 30)
     try:
-        data['gdp'] = handler.db.get(pview[projectid].rows[0].id)['delivery_projects']
+        data['gdp'] = db.get(db.view(pview, key=projectid)['id'])['delivery_projects']
     except (KeyError, IndexError):
         data['gdp'] = []
 
@@ -108,25 +108,25 @@ class Home(RequestHandler):
 
     def get(self):
         try:
-            samples_count = self.db.view('sample/count').rows[0].value
+            samples_count = self.db.view('sample/count')[0]['value']
         except IndexError:
             samples_count = 0
         try:
-            libpreps_count = self.db.view('libprep/count').rows[0].value
+            libpreps_count = self.db.view('libprep/count')[0]['value']
         except IndexError:
             libpreps_count = 0
         view = self.db.view('project/modified', limit=10,
                             descending=True,
                             include_docs=True)
-        projects = [r.doc for r in view]
+        projects = [r['doc'] for r in view]
         view = self.db.view('sample/modified', limit=10,
                             descending=True,
                             include_docs=True)
-        samples = [r.doc for r in view]
+        samples = [r['doc'] for r in view]
         view = self.db.view('libprep/modified', limit=10,
                             descending=True,
                             include_docs=True)
-        libpreps = [r.doc for r in view]
+        libpreps = [r['doc'] for r in view]
         self.render('home.html',
                     projects_count=len(list(self.db.view('project/name'))),
                     samples_count=samples_count,
@@ -145,25 +145,25 @@ class Search(RequestHandler):
         term = self.get_argument('term', '')
         items = dict()
         if term:
-            view = self.db.view('project/projectid')
-            for row in view[term : term+constants.HIGH_CHAR]:
-                doc = self.get_project(row.key)
+            view_result = self.db.view('project/projectid', start_key=term, end_key=term+constants.HIGH_CHAR)
+            for row in view_result:
+                doc = self.get_project(row['key'])
                 items[doc['_id']] = doc
-            view = self.db.view('project/name')
-            for row in view[term : term+constants.HIGH_CHAR]:
-                doc = self.get_project(row.value)
+            view_result = self.db.view('project/name', start_key=term, end_key=term+constants.HIGH_CHAR)
+            for row in view_result:
+                doc = self.get_project(row['value'])
                 items[doc['_id']] = doc
-            view = self.db.view('project/splitname')
-            for row in view[term : term+constants.HIGH_CHAR]:
-                doc = self.get_project(row.value)
+            view_result = self.db.view('project/splitname', start_key=term, end_key=term+constants.HIGH_CHAR)
+            for row in view_result:
+                doc = self.get_project(row['value'])
                 items[doc['_id']] = doc
-            view = self.db.view('user/email')
-            for row in view[term : term+constants.HIGH_CHAR]:
-                doc = self.get_user(row.key)
+            view_result = self.db.view('user/email', start_key=term, end_key=term+constants.HIGH_CHAR)
+            for row in view_result:
+                doc = self.get_user(row['key'])
                 items[doc['_id']] = doc
-            view = self.db.view('user/name')
-            for row in view[term : term+constants.HIGH_CHAR]:
-                doc = self.get_user(row.value)
+            view_result = self.db.view('user/name', start_key=term, end_key=term+constants.HIGH_CHAR)
+            for row in view_result:
+                doc = self.get_user(row['value'])
                 items[doc['_id']] = doc
         items = sorted(list(items.values()),
                        key=functools.cmp_to_key(lambda i,j: utils.cmp(i['modified'], j['modified'])),

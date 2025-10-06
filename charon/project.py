@@ -1,5 +1,6 @@
 " Charon: Project entity interface. "
 
+import ast
 import logging
 import json
 import csv
@@ -21,8 +22,8 @@ class ProjectidField(sav.IdField):
     def check_valid(self, saver, value):
         "Also check uniqueness."
         super(ProjectidField, self).check_valid(saver, value)
-        view = saver.db.view('project/projectid')
-        if len(list(view[value])) > 0:
+        view = saver.db.view('project/projectid', key=value)
+        if len(list(view)) > 0:
             raise ValueError('not unique')
 
 
@@ -34,8 +35,8 @@ class ProjectnameField(sav.NameField):
         "Also check uniqueness."
         super(ProjectnameField, self).check_valid(saver, value)
         if saver.get(self.key) == value: return
-        view = saver.db.view('project/name')
-        if len(list(view[value])) > 0:
+        view = saver.db.view('project/name', key=value)
+        if len(list(view)) > 0:
             raise ValueError('not unique')
 
 
@@ -86,10 +87,10 @@ class UploadSamplesMixin(object):
         self.errors = []
         samples_set = set()
         view = self.db.view('sample/sampleid',
-                            startkey=[project['projectid'], ''],
-                            endkey=[project['projectid'], cst.HIGH_CHAR])
+                            start_key=[project['projectid'], ''],
+                            end_key=[project['projectid'], cst.HIGH_CHAR])
         for row in view:
-            sampleid = row.key[1]
+            sampleid = row['key'][1]
             if sampleid in samples_set:
                 self.errors.append("sampleid '{0}' defined multiple times?".
                                    format(sampleid))
@@ -214,24 +215,22 @@ class Project(RequestHandler):
         project = self.get_project(projectid)
         projectid=project['projectid']
         samples = self.get_samples(projectid)
-        view = self.db.view('libprep/count')
         for sample in samples:
             try:
-                row = view[[projectid, sample['sampleid']]].rows[0]
+                row = self.db.view('libprep/count', key=[projectid, sample['sampleid']])[0]
             except IndexError:
                 sample['libpreps_count'] = 0
             else:
-                sample['libpreps_count'] = row.value
-        view = self.db.view('seqrun/count')
+                sample['libpreps_count'] = row['value']
         for sample in samples:
             try:
                 startkey = [projectid, sample['sampleid']]
                 endkey = [projectid, sample['sampleid'], cst.HIGH_CHAR]
-                row = view[startkey:endkey].rows[0]
+                row = self.db.view('seqrun/count', start_key=startkey, end_key=endkey)[0]
             except IndexError:
                 sample['seqruns_count'] = 0
             else:
-                sample['seqruns_count'] = row.value
+                sample['seqruns_count'] = row['value']
         logs = self.get_logs(project['_id']) # XXX limit?
         self.render('project.html',
                     project=project,
@@ -401,6 +400,10 @@ class ApiProject(UploadSamplesMixin, ApiRequestHandler):
         if not project: return
         try:
             data = json.loads(self.request.body)
+            if "delivery_projects" in data:
+                # Make sure it's a list
+                if isinstance(data["delivery_projects"], str):
+                    data["delivery_projects"] = ast.literal_eval(data["delivery_projects"])
         except Exception as msg:
             logging.debug("Exception: %s", msg)
             self.send_error(400, reason=str(msg))
@@ -457,6 +460,10 @@ class ApiProjectCreate(ApiRequestHandler):
         Return HTTP 409 if there is a document revision conflict."""
         try:
             data = json.loads(self.request.body)
+            if "delivery_projects" in data:
+                # Make sure it's a list
+                if isinstance(data["delivery_projects"], str):
+                    data["delivery_projects"] = ast.literal_eval(data["delivery_projects"])
         except Exception as msg:
             self.send_error(400, reason=str(msg))
         else:

@@ -41,23 +41,6 @@ Development server
 The development server is at http://charon-dev.scilifelab.se/ . It is
 currently reachable only from within SciLifeLab Stockholm.
 
-Database wipe every weekend!
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Please note that the CouchDB databases on tools-dev are all wiped clean
-and reloaded from tools every weekend. Since there currently is no data
-in the Charon database on tools, the tools-dev Charon instance gets
-totally wiped out. Not even the design documents are spared.
-
-To handle this, I currently manually dump and reload the Charon
-database, on Friday afternoon and Monday morning, respectively:
-
-::
-
-    $ python dump.py
-
-    $ python init_database.py # Answer 'y' to the question.
-
 Installation
 ~~~~~~~~~~~~
 

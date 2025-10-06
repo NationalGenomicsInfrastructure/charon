@@ -4,7 +4,6 @@ import logging
 import json
 
 import tornado.web
-import couchdb
 
 from . import constants
 from . import settings
@@ -21,8 +20,8 @@ class LibprepidField(IdField):
         "Also check uniqueness."
         super(LibprepidField, self).check_valid(saver, value)
         key = (saver.project['projectid'], saver.sample['sampleid'], value)
-        view = saver.db.view('libprep/libprepid')
-        if len(list(view[key])) > 0:
+        view_result = saver.db.view('libprep/libprepid', key=key)
+        if len(list(view_result)) > 0:
             raise ValueError('not unique')
 
 

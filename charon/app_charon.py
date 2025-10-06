@@ -4,7 +4,6 @@ import logging
 
 import tornado
 import tornado.web
-import couchdb
 
 from charon import constants
 from charon import utils

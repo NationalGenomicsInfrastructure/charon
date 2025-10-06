@@ -5,7 +5,6 @@ import csv
 import io
 
 import tornado.web
-import couchdb
 
 from . import constants
 from . import settings

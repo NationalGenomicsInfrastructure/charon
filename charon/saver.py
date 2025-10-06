@@ -2,7 +2,7 @@
 
 import logging
 
-import couchdb
+import ibm_cloud_sdk_core
 
 from . import constants
 from . import utils
@@ -320,7 +320,7 @@ class Saver(object):
         self.finalize()
         try:
             self.db.save(self.doc)
-        except couchdb.http.ResourceConflict:
+        except ibm_cloud_sdk_core.ApiException as err:
             raise IOError('document revision update conflict')
         if self.changed:
             utils.log(self.db, self.doc,

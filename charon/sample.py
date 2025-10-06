@@ -4,7 +4,6 @@ import logging
 import json
 
 import tornado.web
-import couchdb
 
 import charon.constants as cst
 import charon.utils as utls
@@ -20,8 +19,8 @@ class SampleidField(sav.IdField):
         "Also check uniqueness."
         super(SampleidField, self).check_valid(saver, value)
         key = (saver.project['projectid'], value)
-        view = saver.db.view('sample/sampleid')
-        if len(list(view[key])) > 0:
+        view = saver.db.view('sample/sampleid', key=key)
+        if len(list(view)) > 0:
             raise ValueError('not unique')
 
 
@@ -89,17 +88,17 @@ class Sample(RequestHandler):
     def get(self, projectid, sampleid):
         sample = self.get_sample(projectid, sampleid)
         libpreps = self.get_libpreps(projectid, sampleid)
-        view = self.db.view('seqrun/count')
         for libprep in libpreps:
             try:
                 startkey = [projectid, sampleid, libprep['libprepid']]
                 endkey = [projectid, sampleid, libprep['libprepid'],
                           cst.HIGH_CHAR]
-                row = view[startkey:endkey].rows[0]
+                row = self.db.view('seqrun/count', start_key=startkey,
+                                   end_key=endkey)[0]
             except IndexError:
                 libprep['seqruns_count'] = 0
             else:
-                libprep['seqruns_count'] = row.value
+                libprep['seqruns_count'] = row['value']
         logs = self.get_logs(sample['_id']) # XXX limit?
         self.render('sample.html',
                     sample=sample,

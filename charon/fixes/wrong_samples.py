@@ -14,7 +14,7 @@ if __name__ == '__main__':
     db = utils.get_db()
     total = 0
     count = 0
-    for id in list(db):
+    for id in db:
         doc = db[id]
         if doc.get('charon_doctype') != 'sample': continue
         total += 1

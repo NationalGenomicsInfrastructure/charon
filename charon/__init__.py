@@ -1,6 +1,6 @@
 " Charon: Database for IGN projects and samples, with RESTful interface. "
 
-__version__ = '14.7'
+__version__ = '14.8'
 
 settings = dict(BASE_URL='http://localhost:8881/',
                 DB_SERVER='http://localhost:5984/',

@@ -13,7 +13,7 @@ if __name__ == '__main__':
     rows = list(view)
     if len(rows) != 1:
         sys.exit('no such project')
-    project = rows[0].doc
+    project = rows[0]['doc']
     print('Project', project['projectid'], project.get('title', '[no title]'))
     answer = input('really delete? (y/n) > ')
     if utils.to_bool(answer):

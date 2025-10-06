@@ -4,7 +4,6 @@ import logging
 import json
 
 import tornado.web
-import couchdb
 
 from . import constants
 from . import settings
@@ -23,8 +22,8 @@ class SeqrunidField(IdField):
         if not constants.RID_RX.match(value):
             raise ValueError('invalid identifier value (disallowed characters)')
         key = (saver.project['projectid'], saver.sample['sampleid'], saver.libprep['libprepid'], value)
-        view = saver.db.view('seqrun/seqrunid')
-        if len(list(view[key])) > 0:
+        view = saver.db.view('seqrun/seqrunid', key=key)
+        if len(list(view)) > 0:
             raise ValueError('not unique')
 
 

@@ -5,7 +5,6 @@ import json
 import urllib.parse
 
 import tornado.web
-import couchdb
 import requests
 
 from . import constants
@@ -120,5 +119,5 @@ class Users(RequestHandler):
     @tornado.web.authenticated
     def get(self):
         view = self.db.view('user/email')
-        users = [self.get_user(r.key) for r in view]
+        users = [self.get_user(r['key']) for r in view]
         self.render('users.html', users=users)

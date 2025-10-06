@@ -1,6 +1,5 @@
 tornado>=3.2
-couchdb>=0.8
+ibmcloudant>=0.10.7
 pyyaml>=3.10
 requests>=2.2
 LIMS2DB
-

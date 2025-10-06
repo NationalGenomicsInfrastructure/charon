@@ -7,14 +7,132 @@ import urllib.parse
 import uuid
 import datetime
 import unicodedata
+from importlib.metadata import version
 
 import tornado.web
-import couchdb
+from ibmcloudant import CouchDbSessionAuthenticator, cloudant_v1
+import ibm_cloud_sdk_core
 import yaml
 
 import charon
 from . import constants
 from . import settings
+
+
+class CloudantDatabaseWrapper:
+    # Wrap a CloudantV1 client to provide a minimal CouchDB-like database interface.
+    def __init__(self, client, db_name):
+        self.client = client
+        self.db_name = db_name
+
+    def __getitem__(self, doc_id):
+        """Mimics db['doc_id']"""
+        response = self.client.get_document(
+            db=self.db_name,
+            doc_id=doc_id
+        ).get_result()
+        return response
+    
+    def __delitem__(self, doc_id):
+        """Mimics del db['doc_id'] - deletes a document by ID"""
+        try:
+            # Get the document first to obtain the revision
+            doc = self.get_document(doc_id)
+            response = self.client.delete_document(
+                db=self.db_name,
+                doc_id=doc_id,
+                rev=doc['_rev']
+            ).get_result()
+            return response
+        except Exception as e:
+            logging.error(f"Error deleting document {doc_id}: {e}")
+            raise KeyError(f"Cannot delete document {doc_id}: {e}")
+
+    def __iter__(self):
+        """Make the database wrapper iterable by document IDs"""
+        try:
+            # Get all document IDs using _all_docs view
+            response = self.client.post_all_docs(
+                db=self.db_name,
+                include_docs=False  # Only get IDs, not full documents
+            ).get_result()
+
+            for row in response.get('rows', []):
+                yield row['id']
+        except Exception as e:
+            logging.error(f"Error iterating database: {e}")
+            return
+
+    def get(self, doc_id):
+        """Get a document by ID, returns None if not found."""
+        try:
+            response = self.client.get_document(
+                db=self.db_name,
+                doc_id=doc_id
+            ).get_result()
+            return response
+        except ibm_cloud_sdk_core.api_exception.ApiException as e:
+            if e.code == 404:
+                return None
+            raise KeyError(f"Error fetching document: {e}")
+
+    def view(self, viewname, **options):
+        """Mimics db.view(...)"""
+        ddoc, view = viewname.split('/')
+        response = self.client.post_view(
+            db=self.db_name,
+            ddoc=ddoc,
+            view=view,
+            **options
+        ).get_result()
+        return response.get('rows', [])
+
+    def save(self, document):
+        """Mimics db.save(doc)"""
+        if '_id' in document:
+            doc_id = document['_id']
+        else:
+            doc_id = uuid.uuid4().hex
+            document['_id'] = doc_id
+        response = self.client.put_document(
+            db=self.db_name,
+            doc_id=doc_id,
+            document=document
+        ).get_result()
+        return response
+
+    def delete(self, document):
+        """Mimics db.delete(doc)"""
+        if '_id' not in document or '_rev' not in document:
+            raise ValueError("Document must have '_id' and '_rev' to be deleted")
+        response = self.client.delete_document(
+            db=self.db_name,
+            doc_id=document['_id'],
+            rev=document['_rev']
+        ).get_result()
+        return response
+
+    def get_attachment(self, doc_id, attachment_name):
+        """Get an attachment from a document."""
+        response = self.client.get_attachment(
+            db=self.db_name,
+            doc_id=doc_id,
+            attachment_name=attachment_name
+        ).get_result()
+        return response
+
+    def put_attachment(self, doc_id, data, attachment_name, content_type, rev):
+        """Put an attachment to a document."""
+        response = self.client.put_attachment(
+            db=self.db_name,
+            doc_id=doc_id,
+            attachment=data,
+            attachment_name=attachment_name,
+            content_type=content_type,
+            rev=rev
+        ).get_result()
+        return response
+
 
 def load_settings(filepath=None):
     """Load and return the settings from the given settings file,
@@ -64,7 +182,7 @@ def load_settings(filepath=None):
     logging.info("settings from file %s", filepath)
     # Check settings
     for key in ['BASE_URL', 'DB_SERVER', 'DB_DATABASE',
-                'COOKIE_SECRET', 'AUTH']:
+                'DB_USERNAME', 'DB_PASSWORD', 'COOKIE_SECRET', 'AUTH']:
         if key not in settings:
             raise KeyError("no settings['{0}'] item".format(key))
         if not settings[key]:
@@ -79,7 +197,7 @@ def load_settings(filepath=None):
     if len(settings['COOKIE_SECRET']) < 10:
         raise ValueError("settings['COOKIE_SECRET'] too short")
     # Settings computable from others
-    settings['DB_SERVER_VERSION'] = couchdb.Server(settings['DB_SERVER']).version()
+    settings['DB_SERVER_VERSION'] = get_couchdb_client().get_server_information().get_result().get("version")
     if 'PORT' not in settings:
         parts = urllib.parse.urlparse(settings['BASE_URL'])
         items = parts.netloc.split(':')
@@ -93,11 +211,24 @@ def load_settings(filepath=None):
             raise ValueError('could not determine port from BASE_URL')
     return settings
 
+def get_couchdb_client():
+    "Return the handle for the CouchDB server."
+    try:
+        cloudant = cloudant_v1.CloudantV1(
+            authenticator=CouchDbSessionAuthenticator(
+                settings.get("DB_USERNAME"), settings.get("DB_PASSWORD")
+            )
+        )
+        cloudant.set_service_url(settings.get("DB_SERVER"))
+        return cloudant
+    except Exception as e:
+        raise KeyError("Could not connect to CouchDB server: %s" % str(e))
+
 def get_db():
     "Return the handle for the CouchDB database."
     try:
-        return couchdb.Server(settings['DB_SERVER'])[settings['DB_DATABASE']]
-    except couchdb.http.ResourceNotFound:
+        return CloudantDatabaseWrapper(get_couchdb_client(), settings['DB_DATABASE'])
+    except ibm_cloud_sdk_core.api_exception.ApiException:
         raise KeyError("CouchDB database '%s' does not exist" %
                        settings['DB_DATABASE'])
 
@@ -106,7 +237,7 @@ def get_versions():
     return [('Charon', charon.__version__),
             ('tornado', tornado.version),
             ('CouchDB server', settings['DB_SERVER_VERSION']),
-            ('CouchDB module', couchdb.__version__)]
+            ('Cloudant module', version('ibmcloudant'))]
 
 def get_iuid():
     "Return a unique instance identifier."
@@ -169,23 +300,23 @@ def delete_project(db, project):
     "Delete the project and all its dependent entities."
     startkey = (project['projectid'], '')
     endkey = (project['projectid'], constants.HIGH_CHAR)
-    view = db.view('sample/sampleid', include_docs=True)
-    samples = [r.doc for r in view[startkey:endkey]]
+    view_result = db.view('sample/sampleid', include_docs=True, startkey=startkey, endkey=endkey)
+    samples = [r['doc'] for r in view_result]
     for sample in samples:
         delete_sample(db, sample)
     delete_logs(db, project['_id'])
-    del db[project['_id']]
+    db.delete(project)
 
 def delete_sample(db, sample):
     "Delete the sample and all its dependent entities."
     delete_logs(db, sample['_id'])
     startkey = (sample['projectid'], sample['sampleid'], '')
     endkey = (sample['projectid'], sample['sampleid'], constants.HIGH_CHAR)
-    view = db.view('libprep/libprepid', include_docs=True)
-    libpreps = [r.doc for r in view[startkey:endkey]]
+    view_result = db.view('libprep/libprepid', include_docs=True, startkey=startkey, endkey=endkey)
+    libpreps = [r['doc'] for r in view_result]
     for libprep in libpreps:
         delete_libprep(db, libprep)
-    del db[sample['_id']]
+    db.delete(sample)
 
 def delete_libprep(db, libprep):
     "Delete the libprep and all its dependent entities."
@@ -194,21 +325,21 @@ def delete_libprep(db, libprep):
                 libprep['libprepid'], '')
     endkey = (libprep['projectid'], libprep['sampleid'],
               libprep['libprepid'], constants.HIGH_CHAR)
-    view = db.view('seqrun/seqrunid', include_docs=True)
-    seqruns = [r.doc for r in view[startkey:endkey]]
+    view_result = db.view('seqrun/seqrunid', include_docs=True, startkey=startkey, endkey=endkey)
+    seqruns = [r['doc'] for r in view_result]
     for seqrun in seqruns:
         delete_seqrun(db, seqrun)
     logging.debug("deleting libprep %s", startkey)
-    del db[libprep['_id']]
+    db.delete(libprep)
 
 def delete_seqrun(db, seqrun):
     "Delete the seqrun and all its dependent entities."
     delete_logs(db, seqrun['_id'])
-    del db[seqrun['_id']]
+    db.delete(seqrun)
 
 def delete_logs(db, id):
     "Delete the log documents for the given doc id."
-    ids = [r.id for r in db.view('log/doc')[id]]
+    ids = [r['id'] for r in db.view('log/doc', key=id)]
     for id in ids:
         del db[id]
 

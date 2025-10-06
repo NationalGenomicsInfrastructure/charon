@@ -29,7 +29,7 @@ if __name__ == '__main__':
     except IndexError:
         utils.load_settings()
     db = utils.get_db()
-    for id in list(db):
+    for id in db:
         doc = db[id]
         if doc.get('charon_doctype') != 'seqrun': continue
         del db[id]
