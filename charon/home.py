@@ -79,8 +79,8 @@ def sampleStats(handler, projectid=None):
         data['cov']=0
     data['hge'] = int(data['cov'] / 30)
     try:
-        data['gdp'] = db.get(db.view(pview, key=projectid)['id'])['delivery_projects']
-    except (KeyError, IndexError):
+        data['gdp'] = db.get(db.view(pview, key=projectid)[0]['id'])['delivery_projects']
+    except (KeyError, IndexError, TypeError):
         data['gdp'] = []
 
     return data
